@@ -3,3 +3,5 @@ target/
 .vscode/
 *.log
 .env
+.env.*
+!.env.example
