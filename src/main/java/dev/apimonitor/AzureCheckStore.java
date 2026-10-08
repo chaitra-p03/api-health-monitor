@@ -4,8 +4,7 @@ import com.azure.data.tables.TableClient;
 import com.azure.data.tables.TableClientBuilder;
 import com.azure.data.tables.models.TableEntity;
 import com.azure.data.tables.models.TableServiceException;
-import com.azure.identity.AzureCliCredentialBuilder;
-
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import java.util.UUID;
 
 public class AzureCheckStore {
@@ -33,7 +32,7 @@ public class AzureCheckStore {
         return new TableClientBuilder()
                 .endpoint(endpoint)
                 .tableName(tableName)
-                .credential(new AzureCliCredentialBuilder().build())
+                .credential(new DefaultAzureCredentialBuilder().build())
                 .buildClient();
     }
 
