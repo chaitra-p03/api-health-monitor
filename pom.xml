@@ -60,6 +60,7 @@
             <os>linux</os>
             <javaVersion>21</javaVersion>
         </runtime>
+        <pricingTier>Flex Consumption</pricingTier>
     </configuration>
 
     <executions>
