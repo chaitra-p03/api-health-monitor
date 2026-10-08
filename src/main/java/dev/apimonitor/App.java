@@ -40,6 +40,7 @@ public class App {
                 )
         );
 
+        AzureCheckStore store = new AzureCheckStore();
         FailureTracker failureTracker = new FailureTracker(3);
         CheckHistory history = new CheckHistory(10);
         FailureRateTracker rateTracker = new FailureRateTracker(30);
@@ -56,6 +57,9 @@ public class App {
                 for (EndpointConfig endpoint : endpoints) {
                     CheckResult result = checkEndpoint(endpoint);
                     System.out.println(result);
+
+                    store.save(result);
+                    System.out.println("Saved to Azure");
 
                     CheckHistory.Summary summary = history.add(result);
 
