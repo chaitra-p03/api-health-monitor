@@ -11,6 +11,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <functionAppName>api-monitor-chaitra-240905378</functionAppName>
     </properties>
 
     <dependencyManagement>
@@ -34,6 +35,11 @@
             <groupId>com.azure</groupId>
             <artifactId>azure-identity</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.microsoft.azure.functions</groupId>
+            <artifactId>azure-functions-java-library</artifactId>
+            <version>1.3.1</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -43,6 +49,28 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
             </plugin>
+            <plugin>
+    <groupId>com.microsoft.azure</groupId>
+    <artifactId>azure-functions-maven-plugin</artifactId>
+    <version>1.42.0</version>
+
+    <configuration>
+        <appName>${functionAppName}</appName>
+        <runtime>
+            <os>linux</os>
+            <javaVersion>21</javaVersion>
+        </runtime>
+    </configuration>
+
+    <executions>
+        <execution>
+            <id>package-functions</id>
+            <goals>
+                <goal>package</goal>
+            </goals>
+        </execution>
+    </executions>
+</plugin>
         </plugins>
     </build>
 
