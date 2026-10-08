@@ -6,27 +6,31 @@ public class App {
 
     public static void main(String[] args) {
         List<EndpointConfig> endpoints = List.of(
-                new EndpointConfig(
-                        "healthy-api",
-                        "http://localhost:18080/healthy",
-                        200, 5, 2000
-                ),
-                new EndpointConfig(
-                        "error-api",
-                        "http://localhost:18080/error",
-                        200, 5, 2000
-                ),
-                new EndpointConfig(
-                        "slow-api",
-                        "http://localhost:18080/slow",
-                        200, 5, 2000
-                ),
-                new EndpointConfig(
-                        "timeout-api",
-                        "http://localhost:18080/timeout",
-                        200, 5, 2000
-                )
-        );
+        new EndpointConfig(
+                "healthy-api",
+                configuredUrl("HEALTHY_API_URL",
+                        "http://localhost:18080/healthy"),
+                200, 5, 2000
+        ),
+        new EndpointConfig(
+                "error-api",
+                configuredUrl("ERROR_API_URL",
+                        "http://localhost:18080/error"),
+                200, 5, 2000
+        ),
+        new EndpointConfig(
+                "slow-api",
+                configuredUrl("SLOW_API_URL",
+                        "http://localhost:18080/slow"),
+                200, 5, 2000
+        ),
+        new EndpointConfig(
+                "timeout-api",
+                configuredUrl("TIMEOUT_API_URL",
+                        "http://localhost:18080/timeout"),
+                200, 5, 2000
+        )
+    );
 
         AzureCheckStore store = new AzureCheckStore();
         ApiChecker checker = new ApiChecker();
@@ -63,4 +67,8 @@ public class App {
             System.err.println("Monitoring interrupted.");
         }
     }
+    private static String configuredUrl(String setting, String fallback) {
+        String value = System.getenv(setting);
+        return value == null || value.isBlank() ? fallback : value;
+    } 
 }
