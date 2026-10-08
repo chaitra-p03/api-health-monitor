@@ -30,61 +30,37 @@ public class App {
 
         AzureCheckStore store = new AzureCheckStore();
         ApiChecker checker = new ApiChecker();
-
-        FailureTracker failureTracker = new FailureTracker(3);
-        CheckHistory history = new CheckHistory(10);
-        FailureRateTracker rateTracker = new FailureRateTracker(30);
-        SlowResponseTracker slowTracker = new SlowResponseTracker(3);
-
-        int totalRounds = 13;
+        MonitorRules rules = new MonitorRules();
 
         try {
-            for (int round = 1; round <= totalRounds; round++) {
-                System.out.println(
-                        "\n--- Monitoring round " + round + " ---"
+            for (EndpointConfig endpoint : endpoints) {
+                MonitorState state = store.loadState(endpoint.name());
+
+                CheckResult result = checker.check(endpoint);
+                System.out.println(result);
+
+                store.save(result);
+
+                List<String> notifications = rules.evaluate(result, state);
+                store.saveState(endpoint.name(), state);
+
+                System.out.printf(
+                        "Saved to Azure | consecutiveFailures=%d"
+                                + " | consecutiveSlowChecks=%d"
+                                + " | recentFailures=%s%n",
+                        state.consecutiveFailures,
+                        state.consecutiveSlowChecks,
+                        state.recentFailures
                 );
 
-                for (EndpointConfig endpoint : endpoints) {
-                    CheckResult result = checker.check(endpoint);
-                    System.out.println(result);
-
-                    store.save(result);
-                    System.out.println("Saved to Azure");
-
-                    CheckHistory.Summary summary = history.add(result);
-
-                    System.out.printf(
-                            "name=%s | window=%d | failures=%d"
-                                    + " | failureRate=%.1f%% | windowFull=%s%n",
-                            result.endpointName(),
-                            summary.checks(),
-                            summary.failures(),
-                            summary.failureRatePercent(),
-                            summary.windowFull()
-                    );
-
-                    printNotification(failureTracker.evaluate(result));
-                    printNotification(slowTracker.evaluate(result));
-
-                    printNotification(rateTracker.evaluate(
-                            result.endpointName(), summary
-                    ));
-                }
-
-                if (round < totalRounds) {
-                    Thread.sleep(2000);
+                for (String notification : notifications) {
+                    System.out.println(notification);
                 }
             }
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             System.err.println("Monitoring interrupted.");
-        }
-    }
-
-    private static void printNotification(String notification) {
-        if (notification != null) {
-            System.out.println(notification);
         }
     }
 }
