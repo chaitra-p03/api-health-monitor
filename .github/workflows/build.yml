@@ -16,5 +16,9 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Install Azure Functions Core Tools
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
       - name: Build project
         run: mvn --batch-mode clean package
+
