@@ -55,6 +55,7 @@
     <version>1.42.0</version>
 
     <configuration>
+        <resourceGroup>api-monitor-rg</resourceGroup>
         <appName>${functionAppName}</appName>
         <runtime>
             <os>linux</os>
