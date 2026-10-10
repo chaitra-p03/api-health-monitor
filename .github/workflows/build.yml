@@ -1,4 +1,4 @@
-﻿name: Java build
+name: Java build
 
 on:
   push:
@@ -22,3 +22,8 @@ jobs:
       - name: Build project
         run: mvn --batch-mode clean package
 
+
+      - name: Validate Bicep
+        run: |
+          az bicep install
+          az bicep build --file infra/main.bicep --outfile target/main-template.json
