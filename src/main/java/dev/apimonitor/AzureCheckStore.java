@@ -56,8 +56,169 @@ public class AzureCheckStore {
         }
 
         checkClient.createEntity(entity);
+
+        TableEntity latest = new TableEntity(
+                "latest", result.endpointName()
+        );
+                latest.addProperty("Url", result.url());
+        latest.addProperty("CheckedAt", result.checkedAt().toString());
+        latest.addProperty("LatencyMs", result.latencyMs());
+        latest.addProperty("Health", result.health().name());
+
+        if (result.statusCode() != null) {
+            latest.addProperty("StatusCode", result.statusCode());
+        }
+        if (result.error() != null) {
+            latest.addProperty("Error", result.error());
+        }
+
+        stateClient.upsertEntityWithResponse(
+                latest,
+                com.azure.data.tables.models.TableEntityUpdateMode.REPLACE,
+                null,
+                com.azure.core.util.Context.NONE
+        );
     }
 
+    public CheckResult loadLatest(String endpointName) {
+        try {
+            TableEntity entity =
+                    stateClient.getEntity("latest", endpointName);
+
+            Object status = entity.getProperty("StatusCode");
+
+            return new CheckResult(
+                    endpointName,
+                    (String) entity.getProperty("Url"),
+                    java.time.Instant.parse(
+                            (String) entity.getProperty("CheckedAt")
+                    ),
+                    status == null ? null : ((Number) status).intValue(),
+                    ((Number) entity.getProperty("LatencyMs")).longValue(),
+                    HealthStatus.valueOf(
+                            (String) entity.getProperty("Health")
+                    ),
+                    (String) entity.getProperty("Error")
+            );
+
+        } catch (TableServiceException e) {
+            String code = e.getValue() == null
+                    ? ""
+                    : String.valueOf(e.getValue().getErrorCode());
+
+            boolean missingRecord =
+                    "ResourceNotFound".equals(code)
+                    || "EntityNotFound".equals(code);
+
+            if (e.getResponse().getStatusCode() == 404 && missingRecord) {
+                return null;
+            }
+
+            throw e;
+        }
+    }
+    public String loadDemoMode() {
+        try {
+            String mode = (String) stateClient
+                    .getEntity("demo", "mode").getProperty("Mode");
+
+            if (!"healthy".equals(mode) && !"failed".equals(mode)) {
+                throw new IllegalStateException("Invalid stored demo mode");
+            }
+            return mode;
+        } catch (TableServiceException e) {
+            if (missingDemoRecord(e)) {
+                return "healthy";
+            }
+            throw e;
+        }
+    }
+
+    public void saveDemoMode(String mode) {
+        if (!"healthy".equals(mode) && !"failed".equals(mode)) {
+            throw new IllegalArgumentException("Invalid demo mode");
+        }
+        TableEntity entity = new TableEntity("demo", "mode");
+        entity.addProperty("Mode", mode);
+        stateClient.upsertEntity(entity);
+    }
+
+    public String acquireDemoLease() {
+        String owner = UUID.randomUUID().toString();
+        String expires = java.time.Instant.now()
+                .plusSeconds(240).toString();
+
+        TableEntity lease = new TableEntity("demo", "lease");
+        lease.addProperty("Owner", owner);
+        lease.addProperty("ExpiresAt", expires);
+
+        try {
+            stateClient.createEntity(lease);
+            return owner;
+        } catch (TableServiceException e) {
+            if (e.getResponse().getStatusCode() != 409) {
+                throw e;
+            }
+        }
+
+        try {
+            TableEntity existing = stateClient.getEntity("demo", "lease");
+            java.time.Instant expiry = java.time.Instant.parse(
+                    (String) existing.getProperty("ExpiresAt")
+            );
+
+            if (expiry.isAfter(java.time.Instant.now())) {
+                return null;
+            }
+
+            existing.addProperty("Owner", owner);
+            existing.addProperty("ExpiresAt", expires);
+
+            stateClient.updateEntityWithResponse(
+                    existing,
+                    com.azure.data.tables.models.TableEntityUpdateMode.REPLACE,
+                    true,
+                    null,
+                    com.azure.core.util.Context.NONE
+            );
+            return owner;
+
+        } catch (TableServiceException e) {
+            int status = e.getResponse().getStatusCode();
+            if (status == 404 || status == 409 || status == 412) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    public void releaseDemoLease(String owner) {
+        try {
+            TableEntity lease = stateClient.getEntity("demo", "lease");
+
+            if (owner.equals(lease.getProperty("Owner"))) {
+                stateClient.deleteEntityWithResponse(
+                        lease, true, null,
+                        com.azure.core.util.Context.NONE
+                );
+            }
+        } catch (TableServiceException e) {
+            int status = e.getResponse().getStatusCode();
+            if (status != 404 && status != 412) {
+                throw e;
+            }
+        }
+    }
+
+    private boolean missingDemoRecord(TableServiceException e) {
+        String code = e.getValue() == null
+                ? ""
+                : String.valueOf(e.getValue().getErrorCode());
+
+        return e.getResponse().getStatusCode() == 404
+                && ("ResourceNotFound".equals(code)
+                || "EntityNotFound".equals(code));
+    }
     public MonitorState loadState(String endpointName) {
         try {
             TableEntity entity =

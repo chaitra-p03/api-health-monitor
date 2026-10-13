@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Health Monitor</title>
+<style>
+:root{--bg:#f5f6fa;--ink:#182238;--muted:#69758b;--line:#e2e6ef;--blue:#4f46e5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+button,input{font:inherit}
+button{cursor:pointer;border:1px solid var(--line);border-radius:9px;padding:11px 16px;background:white;font-weight:600;color:var(--ink)}
+button:disabled{opacity:.5;cursor:wait}
+button.primary{background:var(--blue);color:white;border-color:var(--blue)}
+button.danger{color:#b42338;background:#fff0f2;border-color:#ffd3dc}
+button.success{color:#087654;background:#ecfbf3;border-color:#bdebd4}
+header{background:#152039;color:white;padding:22px 5%;display:flex;justify-content:space-between;align-items:center}
+.brand{font-weight:750;font-size:20px;letter-spacing:-.5px}
+.brand small{display:block;color:#a8b7d5;font-size:12px;letter-spacing:.8px;margin-top:5px;font-weight:500}
+header span{font-size:13px;color:#c7d2e8}
+main{max-width:1400px;margin:auto;padding:30px}
+.heading{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:24px}
+h1{font-size:30px;letter-spacing:-1px;margin:0 0 6px}
+p{color:var(--muted);margin:0;line-height:1.6}
+h2{font-size:17px;margin:0 0 5px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:22px}
+.metric,.panel,.api-card{background:white;border:1px solid var(--line);border-radius:14px}
+.metric{padding:19px}.metric span{color:var(--muted);font-size:13px}.metric strong{display:block;font-size:32px;margin-top:7px}
+.section-label{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:1.1px;margin:26px 0 12px}
+.api-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:13px}
+.api-card{padding:17px;min-width:0;border-top:4px solid #a3adbd}
+.api-card.HEALTHY{border-top-color:#12a879}.api-card.FAILED{border-top-color:#e44860}.api-card.SLOW{border-top-color:#e6a027}
+.card-top{display:flex;justify-content:space-between;gap:6px;align-items:center}
+.api-name{font-weight:700;font-size:14px}
+.badge{font-size:10px;padding:4px 7px;border-radius:20px;background:#eef0f5;color:#657087;font-weight:750}
+.badge.HEALTHY{background:#e4f8ee;color:#087654}.badge.FAILED{background:#ffe9ee;color:#b42338}.badge.SLOW{background:#fff3dc;color:#996012}
+.latency{font-size:30px;font-weight:750;margin:21px 0 3px;letter-spacing:-1px}
+.latency small{font-size:13px;font-weight:500;color:var(--muted)}
+.detail{font-size:12px;color:var(--muted);margin-top:7px;overflow-wrap:anywhere}
+.alert{font-size:11px;color:#b42338;font-weight:650;margin-top:12px}
+.demo-panel{margin-top:22px;padding:22px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.controls{display:flex;gap:9px;flex-wrap:wrap}
+.columns{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;margin-top:22px}
+.panel-content{padding:22px}
+.chart-title{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.legend{display:flex;flex-wrap:wrap;gap:13px;font-size:11px;color:var(--muted);margin:18px 0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+canvas{display:block;width:100%;height:230px}
+.events{max-height:280px;overflow:auto;margin-top:18px}
+.event{padding:12px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+.event time{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+.event.recovery{color:#087654}.event.failure{color:#b42338}
+.empty{color:var(--muted);font-size:13px;padding:30px 0;text-align:center}
+.table-panel{margin-top:22px;overflow:hidden}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:14px 22px;border-top:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.7px;background:#fafbfe}
+.notice{font-size:12px;color:var(--muted);margin-top:18px}
+#message{display:none;margin-bottom:18px;padding:12px 16px;border-radius:9px;background:#fff0f2;color:#b42338}
+dialog{border:0;border-radius:18px;padding:30px;max-width:440px;width:calc(100% - 32px);box-shadow:0 25px 80px #12203b40}
+dialog::backdrop{background:#13203988}
+dialog h2{font-size:23px;margin-bottom:10px}
+input{width:100%;padding:13px;margin:18px 0 12px;border:1px solid var(--line);border-radius:8px}
+#connectError{color:#b42338;font-size:13px;margin-top:10px}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:28px}
+@media(max-width:1100px){.api-grid{grid-template-columns:repeat(3,1fr)}.columns{grid-template-columns:1fr}}
+@media(max-width:650px){main{padding:20px 15px}.summary{grid-template-columns:repeat(2,1fr)}.api-grid{grid-template-columns:1fr}.heading,.demo-panel{align-items:flex-start;flex-direction:column}header{padding:20px}header span{display:none}.controls button{flex:1}}
+</style>
+</head>
+<body>
+<header>
+<div class="brand">API Health Monitor<small>CLOUD MONITORING & AUTOMATED DETECTION</small></div>
+<span id="connection">Disconnected</span>
+</header>
+<main>
+<div class="heading">
+<div><h1>Monitoring overview</h1><p>Real checks. Persistent state. Clear failure and recovery signals.</p></div>
+<button id="refresh">Refresh results</button>
+</div>
+<div id="message" role="alert"></div>
+<div class="summary">
+<div class="metric"><span>Scheduled APIs</span><strong id="total">—</strong></div>
+<div class="metric"><span>Healthy</span><strong id="healthy">—</strong></div>
+<div class="metric"><span>Failed</span><strong id="failed">—</strong></div>
+<div class="metric"><span>Slow</span><strong id="slow">—</strong></div>
+</div>
+<div class="section-label">LATEST API RESULTS</div>
+<div id="cards" class="api-grid"><div class="empty">Connect to load Azure results.</div></div>
+<section class="panel demo-panel">
+<div><h2>Interactive failure & recovery demo</h2><p>Controls check the separate demo API. Scheduled monitors run every five minutes.</p><p id="demoHint">Three consecutive failures trigger an outage alert.</p></div>
+<div class="controls">
+<button class="danger" data-action="fail">Simulate failure</button>
+<button class="primary" data-action="check">Run demo check</button>
+<button class="success" data-action="restore">Restore API</button>
+</div>
+</section>
+<div class="columns">
+<section class="panel panel-content">
+<div class="chart-title"><div><h2>Response latency</h2><p>This browser session · milliseconds</p></div></div>
+<div class="legend" id="legend"></div>
+<canvas id="chart" aria-label="Latency of actual API checks observed during this browser session" role="img"></canvas>
+</section>
+<section class="panel panel-content">
+<h2>Demo event timeline</h2><p>Actual check and rule events from this session</p>
+<div class="events" id="events"><div class="empty">Run a demo check to begin.</div></div>
+</section>
+</div>
+<section class="panel table-panel">
+<div class="panel-content"><h2>Recent checks</h2><p>Results observed during this browser session</p></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Time</th><th>API</th><th>Health</th><th>HTTP</th><th>Latency</th><th>Error</th></tr></thead>
+<tbody id="history"><tr><td colspan="6">No checks loaded yet.</td></tr></tbody>
+</table></div>
+</section>
+<p class="notice">Statuses show the latest stored check, not continuous availability. Results older than 15 minutes are marked stale. Email delivery is not verified.</p>
+</main>
+<footer>Azure Functions · Azure Table Storage · Java · Bicep · GitHub Actions</footer>
+<dialog id="connectDialog">
+<h2>Connect to your monitor</h2>
+<p>Enter your Azure Function App host key. It stays in this page’s memory and is cleared when you reload.</p>
+<form id="connectForm">
+<input id="hostKey" type="password" required autocomplete="off" placeholder="Function App host key" aria-label="Function App host key">
+<button class="primary" id="connectButton" type="submit">Connect dashboard</button>
+<div id="connectError" role="alert"></div>
+</form>
+</dialog>
+<script>
+const $=id=>document.getElementById(id);
+const names=['healthy-api','error-api','slow-api','timeout-api','demo-api'];
+const colors=['#12a879','#e44860','#e6a027','#64748b','#4f46e5'];
+const history=[], events=[], seen=new Set();
+let key='', busy=false, connected=false, timer;
+const base=location.pathname.replace(/\/$/,'');
+const escapeHtml=value=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const time=value=>value?new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
+function message(text){$('message').textContent=text;$('message').style.display=text?'block':'none'}
+function lock(value){busy=value;document.querySelectorAll('[data-action],#refresh').forEach(b=>b.disabled=value||!connected)}
+async function api(path,method='GET'){
+ const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),45000);
+ try{
+  const r=await fetch(base+path,{method,headers:{'x-functions-key':key},cache:'no-store',signal:controller.signal});
+  if(r.status===401||r.status===403)throw Error('Access denied. Check that you entered a host key.');
+  const body=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(body.error||`Request failed (${r.status}).`);
+  return body;
+ }catch(e){if(e.name==='AbortError')throw Error('Request timed out. Try again.');throw e}
+ finally{clearTimeout(timeout)}
+}
+function remember(api){
+ if(!api.checkedAt)return;
+ const id=api.name+'|'+api.checkedAt;
+ if(seen.has(id))return;
+ seen.add(id);history.push({...api});
+ history.sort((a,b)=>Date.parse(b.checkedAt)-Date.parse(a.checkedAt));
+ while(history.length>100){const removed=history.pop();seen.delete(removed.name+'|'+removed.checkedAt)}
+}
+function render(data){
+ const scheduled=data.apis.filter(a=>!a.demo);
+ $('total').textContent=scheduled.length;
+ for(const health of ['HEALTHY','FAILED','SLOW'])$(health.toLowerCase()).textContent=scheduled.filter(a=>a.health===health).length;
+ $('cards').innerHTML=data.apis.map(a=>{
+  remember(a);
+  const stale=a.checkedAt&&Date.now()-Date.parse(a.checkedAt)>900000;
+  const active=[a.outageAlerted?'Outage alert active':'',a.slowAlerted?'Slow alert active':'',a.rateAlerted?'Rate alert active':''].filter(Boolean);
+  return `<article class="api-card ${escapeHtml(a.health)}">
+   <div class="card-top"><span class="api-name">${escapeHtml(a.name)}</span><span class="badge ${escapeHtml(a.health)}">${escapeHtml(a.health.replace('_',' '))}</span></div>
+   <div class="latency">${a.latencyMs==null?'—':escapeHtml(a.latencyMs)} <small>ms</small></div>
+   <div class="detail">HTTP ${escapeHtml(a.statusCode)} · ${escapeHtml(time(a.checkedAt))}${stale?' · STALE':''}</div>
+   <div class="detail">${escapeHtml(a.url||'Awaiting first check')}</div>
+   <div class="detail">Failures: ${a.consecutiveFailures} · Slow: ${a.consecutiveSlowChecks}</div>
+   <div class="detail">Failure rate: ${Number(a.failureRatePercent).toFixed(0)}% · window ${a.windowSize}/10</div>
+   ${a.error?`<div class="alert">${escapeHtml(a.error)}</div>`:''}
+   ${active.length?`<div class="alert">${escapeHtml(active.join(' · '))}</div>`:''}
+  </article>`;
+ }).join('');
+ $('history').innerHTML=history.slice(0,12).map(a=>`<tr><td>${escapeHtml(time(a.checkedAt))}</td><td>${escapeHtml(a.name)}</td><td><span class="badge ${escapeHtml(a.health)}">${escapeHtml(a.health)}</span></td><td>${escapeHtml(a.statusCode)}</td><td>${escapeHtml(a.latencyMs)} ms</td><td>${escapeHtml(a.error||'—')}</td></tr>`).join('')||'<tr><td colspan="6">No checks yet.</td></tr>';
+ $('connection').textContent='Connected · refreshed '+time(data.generatedAt);
+ drawChart();
+}
+function drawChart(){
+ const canvas=$('chart'), width=canvas.clientWidth, height=230, dpr=window.devicePixelRatio||1;
+ canvas.width=width*dpr;canvas.height=height*dpr;
+ const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+ const samples=history.filter(a=>a.latencyMs!=null);
+ if(!samples.length){ctx.fillStyle='#69758b';ctx.font='13px system-ui';ctx.fillText('Waiting for real check results…',20,100);return}
+ const left=48,right=12,top=12,bottom=28, max=Math.max(1000,...samples.map(a=>a.latencyMs))*1.15;
+ const timestamps=samples.map(a=>Date.parse(a.checkedAt)),minTime=Math.min(...timestamps),maxTime=Math.max(...timestamps);
+ ctx.font='11px system-ui';ctx.lineWidth=1;
+ for(let i=0;i<=4;i++){const y=top+(height-top-bottom)*i/4;ctx.strokeStyle='#e8ecf3';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(width-right,y);ctx.stroke();ctx.fillStyle='#69758b';ctx.fillText(Math.round(max*(1-i/4)),2,y+4)}
+ names.forEach((name,index)=>{
+  const points=samples.filter(a=>a.name===name).sort((a,b)=>Date.parse(a.checkedAt)-Date.parse(b.checkedAt));
+  ctx.strokeStyle=colors[index];ctx.fillStyle=colors[index];ctx.lineWidth=2;ctx.beginPath();
+  points.forEach((a,i)=>{const x=left+(width-left-right)*(maxTime===minTime?.5:(Date.parse(a.checkedAt)-minTime)/(maxTime-minTime));const y=top+(height-top-bottom)*(1-a.latencyMs/max);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.stroke();
+  points.forEach(a=>{const x=left+(width-left-right)*(maxTime===minTime?.5:(Date.parse(a.checkedAt)-minTime)/(maxTime-minTime));const y=top+(height-top-bottom)*(1-a.latencyMs/max);ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill()});
+ });
+ ctx.fillStyle='#69758b';ctx.fillText(time(minTime),left,height-5);ctx.textAlign='right';ctx.fillText(time(maxTime),width-right,height-5);
+}
+async function refresh(){
+ if(busy||!key)return;
+ lock(true);
+ try{render(await api('/data'));message('')}catch(e){message(e.message);$('connection').textContent='Refresh failed · previous results retained'}finally{lock(false)}
+}
+async function demo(action){
+ if(busy||!connected)return;
+ lock(true);message('');
+ try{
+  const data=await api('/demo?action='+action,'POST');
+  const a=data.api;
+  const items=[{text:`${a.name}: ${a.health} · HTTP ${a.statusCode??'—'} · ${a.latencyMs} ms`,at:a.checkedAt},...(data.notifications||[]).map(text=>({text,at:a.checkedAt}))];
+  events.unshift(...items.reverse());events.splice(60);
+  $('events').innerHTML=events.map(e=>`<div class="event ${e.text.includes('RECOVERY:')?'recovery':e.text.includes('ALERT:')?'failure':''}"><time>${escapeHtml(time(e.at))}</time>${escapeHtml(e.text)}</div>`).join('');
+  $('demoHint').textContent=`Demo mode: ${data.mode}. Consecutive failures: ${a.consecutiveFailures}/3.`;
+  remember(a);
+  render(await api('/data'));
+ }catch(e){message(e.message)}finally{lock(false)}
+}
+$('connectForm').addEventListener('submit',async e=>{
+ e.preventDefault();key=$('hostKey').value.trim();$('connectButton').disabled=true;$('connectError').textContent='';
+ try{render(await api('/data'));connected=true;$('hostKey').value='';$('connectDialog').close();lock(false);clearInterval(timer);timer=setInterval(refresh,30000)}
+ catch(error){key='';$('connectError').textContent=error.message}
+ finally{$('connectButton').disabled=false}
+});
+$('refresh').addEventListener('click',refresh);
+document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>demo(b.dataset.action)));
+$('legend').innerHTML=names.map((n,i)=>`<span><i class="dot" style="background:${colors[i]}"></i>${n}</span>`).join('');
+window.addEventListener('resize',drawChart);
+lock(false);$('connectDialog').showModal();
+</script>
+</body>
+</html>
