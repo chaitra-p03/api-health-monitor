@@ -1,7 +1,10 @@
 # API Health Monitor
 
-A Java application that checks API availability and response speed,
-persists monitoring history in Azure, and displays results in a public dashboard.
+**Cloud-Based API Health Monitoring and Incident Detection System Using Azure and DevOps Automation**
+
+A Java API monitor running on Azure Functions, with persistent check history,
+outage and latency detection, email alerts, and a public dashboard.
+Built and deployed through GitHub Actions, with infrastructure defined in Bicep.
 
 ## Live dashboard
 
