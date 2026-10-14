@@ -4,7 +4,7 @@ param storageAccountName string
 param notificationEmail string
 param monitorPrincipalId string = ''
 param actionGroupName string = 'api-monitor-email'
-param alertRuleName string = 'api-monitor-notifications'
+param alertRuleName string = 'api-health-monitor-notifications'
 
 resource functionApp 'Microsoft.Web/sites@2024-04-01' existing = {
   name: functionAppName
