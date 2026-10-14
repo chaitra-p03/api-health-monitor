@@ -71,6 +71,7 @@ public class DashboardDemoFunction {
 
             storage.save(result);
             storage.saveState("demo-api", state);
+            storage.saveDemoEvents(result, notifications);
 
             context.getLogger().info(result.toString());
             for (String notification : notifications) {

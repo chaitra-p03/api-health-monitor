@@ -219,6 +219,119 @@ public class AzureCheckStore {
                 && ("ResourceNotFound".equals(code)
                 || "EntityNotFound".equals(code));
     }
+    public java.util.List<java.util.Map<String, Object>> loadDashboardHistory() {
+        String cutoff = java.time.Instant.now()
+                .minusSeconds(3600).toString();
+
+        java.util.List<java.util.Map<String, Object>> checks =
+                new java.util.ArrayList<>();
+
+        for (String name : java.util.List.of(
+                "healthy-api", "error-api", "slow-api",
+                "timeout-api", "demo-api"
+        )) {
+            var options = new com.azure.data.tables.models.ListEntitiesOptions()
+                    .setFilter("PartitionKey eq '" + name
+                            + "' and CheckedAt ge '" + cutoff + "'")
+                    .setTop(100);
+
+            for (TableEntity entity : checkClient.listEntities(
+                    options, null, com.azure.core.util.Context.NONE
+            )) {
+                java.util.Map<String, Object> check =
+                        new java.util.LinkedHashMap<>();
+
+                check.put("name", entity.getPartitionKey());
+                check.put("checkedAt", entity.getProperty("CheckedAt"));
+                check.put("health", entity.getProperty("Health"));
+                check.put("statusCode", entity.getProperty("StatusCode"));
+                check.put("latencyMs", entity.getProperty("LatencyMs"));
+                check.put("url", entity.getProperty("Url"));
+                check.put("error", entity.getProperty("Error"));
+
+                checks.add(check);
+            }
+        }
+
+        checks.sort((a, b) -> java.time.Instant.parse(
+                (String) b.get("checkedAt")
+        ).compareTo(java.time.Instant.parse(
+                (String) a.get("checkedAt")
+        )));
+
+        return new java.util.ArrayList<>(
+                checks.subList(0, Math.min(100, checks.size()))
+        );
+    }
+
+    public void saveDemoEvents(
+            CheckResult result,
+            java.util.List<String> notifications
+    ) {
+        java.util.List<String> messages = new java.util.ArrayList<>(
+                notifications
+        );
+
+        messages.add(result.endpointName() + ": " + result.health()
+                + " | HTTP " + (result.statusCode() == null
+                        ? "-" : result.statusCode())
+                + " | " + result.latencyMs() + " ms"
+                + (result.error() == null
+                        ? "" : " | " + result.error()));
+
+        String groupKey = String.format(
+                "%019d", Long.MAX_VALUE - result.checkedAt().toEpochMilli()
+        ) + "-" + UUID.randomUUID();
+
+        java.util.List<com.azure.data.tables.models.TableTransactionAction>
+                actions = new java.util.ArrayList<>();
+
+        for (int i = 0; i < messages.size(); i++) {
+            TableEntity event = new TableEntity(
+                    "demo-events", groupKey + "-" + String.format("%03d", i)
+            );
+
+            event.addProperty("CheckedAt", result.checkedAt().toString());
+            event.addProperty("Message", messages.get(i));
+            event.addProperty("EndpointName", result.endpointName());
+
+            actions.add(
+                    new com.azure.data.tables.models.TableTransactionAction(
+                            com.azure.data.tables.models.TableTransactionActionType.CREATE,
+                            event
+                    )
+            );
+        }
+
+        stateClient.submitTransaction(actions);
+    }
+
+    public java.util.List<java.util.Map<String, Object>> loadDemoEvents() {
+        var options = new com.azure.data.tables.models.ListEntitiesOptions()
+                .setFilter("PartitionKey eq 'demo-events'")
+                .setTop(30);
+
+        java.util.List<java.util.Map<String, Object>> events =
+                new java.util.ArrayList<>();
+
+        for (TableEntity entity : stateClient.listEntities(
+                options, null, com.azure.core.util.Context.NONE
+        )) {
+            java.util.Map<String, Object> event =
+                    new java.util.LinkedHashMap<>();
+
+            event.put("id", entity.getRowKey());
+            event.put("at", entity.getProperty("CheckedAt"));
+            event.put("text", entity.getProperty("Message"));
+
+            events.add(event);
+            if (events.size() == 30) {
+                break;
+            }
+        }
+
+        return events;
+    }
     public MonitorState loadState(String endpointName) {
         try {
             TableEntity entity =

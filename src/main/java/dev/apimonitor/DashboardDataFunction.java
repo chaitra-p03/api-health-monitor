@@ -45,6 +45,8 @@ public class DashboardDataFunction {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("generatedAt", Instant.now().toString());
             response.put("apis", apis);
+            response.put("history", store().loadDashboardHistory());
+            response.put("events", store().loadDemoEvents());
 
             return json(request, HttpStatus.OK, response);
 

@@ -97,17 +97,17 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:28px}
 </section>
 <div class="columns">
 <section class="panel panel-content">
-<div class="chart-title"><div><h2>Response latency</h2><p>This browser session · milliseconds</p></div></div>
+<div class="chart-title"><div><h2>Response latency</h2><p>Past hour · milliseconds</p></div></div>
 <div class="legend" id="legend"></div>
-<canvas id="chart" aria-label="Latency of actual API checks observed during this browser session" role="img"></canvas>
+<canvas id="chart" aria-label="Latency of actual API checks observed during the past hour" role="img"></canvas>
 </section>
 <section class="panel panel-content">
-<h2>Demo event timeline</h2><p>Actual check and rule events from this session</p>
+<h2>Demo event timeline</h2><p>Latest 30 saved demo events</p>
 <div class="events" id="events"><div class="empty">Run a demo check to begin.</div></div>
 </section>
 </div>
 <section class="panel table-panel">
-<div class="panel-content"><h2>Recent checks</h2><p>Results observed during this browser session</p></div>
+<div class="panel-content"><h2>Recent checks</h2><p>Results observed during the past hour</p></div>
 <div class="table-wrap"><table>
 <thead><tr><th>Time</th><th>API</th><th>Health</th><th>HTTP</th><th>Latency</th><th>Error</th></tr></thead>
 <tbody id="history"><tr><td colspan="6">No checks loaded yet.</td></tr></tbody>
@@ -129,7 +129,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:28px}
 const $=id=>document.getElementById(id);
 const names=['healthy-api','error-api','slow-api','timeout-api','demo-api'];
 const colors=['#12a879','#e44860','#e6a027','#64748b','#4f46e5'];
-const history=[], events=[], seen=new Set();
+const history=[], events=[];
 let key='', busy=false, connected=false, timer;
 const base=location.pathname.replace(/\/$/,'');
 const escapeHtml=value=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -147,20 +147,20 @@ async function api(path,method='GET'){
  }catch(e){if(e.name==='AbortError')throw Error('Request timed out. Try again.');throw e}
  finally{clearTimeout(timeout)}
 }
-function remember(api){
- if(!api.checkedAt)return;
- const id=api.name+'|'+api.checkedAt;
- if(seen.has(id))return;
- seen.add(id);history.push({...api});
- history.sort((a,b)=>Date.parse(b.checkedAt)-Date.parse(a.checkedAt));
- while(history.length>100){const removed=history.pop();seen.delete(removed.name+'|'+removed.checkedAt)}
-}
 function render(data){
+ if(!Array.isArray(data.history)||!Array.isArray(data.events)){
+  throw Error('The backend needs updating. Rebuild and restart, or deploy the updated code.');
+ }
+ history.splice(0,history.length,...data.history);
+ events.splice(0,events.length,...data.events);
+ $('events').innerHTML=events.length
+  ? events.map(e=>`<div class="event ${e.text.includes('RECOVERY:')?'recovery':e.text.includes('ALERT:')?'failure':''}"><time>${escapeHtml(time(e.at))}</time>${escapeHtml(e.text)}</div>`).join('')
+  : '<div class="empty">No saved demo events yet. Run a demo check to begin.</div>';
  const scheduled=data.apis.filter(a=>!a.demo);
  $('total').textContent=scheduled.length;
  for(const health of ['HEALTHY','FAILED','SLOW'])$(health.toLowerCase()).textContent=scheduled.filter(a=>a.health===health).length;
  $('cards').innerHTML=data.apis.map(a=>{
-  remember(a);
+
   const stale=a.checkedAt&&Date.now()-Date.parse(a.checkedAt)>900000;
   const active=[a.outageAlerted?'Outage alert active':'',a.slowAlerted?'Slow alert active':'',a.rateAlerted?'Rate alert active':''].filter(Boolean);
   return `<article class="api-card ${escapeHtml(a.health)}">
@@ -208,11 +208,8 @@ async function demo(action){
  try{
   const data=await api('/demo?action='+action,'POST');
   const a=data.api;
-  const items=[{text:`${a.name}: ${a.health} · HTTP ${a.statusCode??'—'} · ${a.latencyMs} ms`,at:a.checkedAt},...(data.notifications||[]).map(text=>({text,at:a.checkedAt}))];
-  events.unshift(...items.reverse());events.splice(60);
-  $('events').innerHTML=events.map(e=>`<div class="event ${e.text.includes('RECOVERY:')?'recovery':e.text.includes('ALERT:')?'failure':''}"><time>${escapeHtml(time(e.at))}</time>${escapeHtml(e.text)}</div>`).join('');
   $('demoHint').textContent=`Demo mode: ${data.mode}. Consecutive failures: ${a.consecutiveFailures}/3.`;
-  remember(a);
+
   render(await api('/data'));
  }catch(e){message(e.message)}finally{lock(false)}
 }
