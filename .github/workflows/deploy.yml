@@ -42,5 +42,5 @@ jobs:
       - name: Deploy Function App
         uses: Azure/functions-action@v1
         with:
-          app-name: api-monitor-chaitra-240905378
-          package: target/azure-functions/api-monitor-chaitra-240905378
+          app-name: api-health-monitor
+          package: target/azure-functions/api-health-monitor

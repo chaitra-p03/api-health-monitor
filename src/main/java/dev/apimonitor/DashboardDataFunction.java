@@ -27,7 +27,7 @@ public class DashboardDataFunction {
             @HttpTrigger(
                     name = "request",
                     methods = {HttpMethod.GET},
-                    authLevel = AuthorizationLevel.FUNCTION,
+                    authLevel = AuthorizationLevel.ANONYMOUS,
                     route = "dashboard/data"
             ) HttpRequestMessage<Optional<String>> request,
             ExecutionContext context

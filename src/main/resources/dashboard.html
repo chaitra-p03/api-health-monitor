@@ -86,9 +86,9 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:28px}
 <div class="metric"><span>Slow</span><strong id="slow">—</strong></div>
 </div>
 <div class="section-label">LATEST API RESULTS</div>
-<div id="cards" class="api-grid"><div class="empty">Connect to load Azure results.</div></div>
+<div id="cards" class="api-grid"><div class="empty">Loading Azure results...</div></div>
 <section class="panel demo-panel">
-<div><h2>Interactive failure & recovery demo</h2><p>Controls check the separate demo API. Scheduled monitors run every five minutes.</p><p id="demoHint">Three consecutive failures trigger an outage alert.</p></div>
+<div><h2>Interactive failure & recovery demo</h2><p>Controls check the separate demo API. Scheduled monitors run every five minutes.</p><p id="demoHint">Viewing is public. Demo actions require a key.</p></div>
 <div class="controls">
 <button class="danger" data-action="fail">Simulate failure</button>
 <button class="primary" data-action="check">Run demo check</button>
@@ -113,15 +113,16 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:28px}
 <tbody id="history"><tr><td colspan="6">No checks loaded yet.</td></tr></tbody>
 </table></div>
 </section>
-<p class="notice">Statuses show the latest stored check, not continuous availability. Results older than 15 minutes are marked stale. Email delivery is not verified.</p>
+<p class="notice">Statuses show the latest stored check, not continuous availability. Results older than 15 minutes are marked stale. Alert email delivery has been verified.</p>
 </main>
 <footer>Azure Functions · Azure Table Storage · Java · Bicep · GitHub Actions</footer>
 <dialog id="connectDialog">
-<h2>Connect to your monitor</h2>
-<p>Enter your Azure Function App host key. It stays in this page’s memory and is cleared when you reload.</p>
+<h2>Unlock demo controls</h2>
+<p>Viewing results is public. A host key is required to run the selected demo action. The key stays in page memory until you reload.</p>
 <form id="connectForm">
 <input id="hostKey" type="password" required autocomplete="off" placeholder="Function App host key" aria-label="Function App host key">
-<button class="primary" id="connectButton" type="submit">Connect dashboard</button>
+<button class="primary" id="connectButton" type="submit">Run selected action</button>
+<button id="cancelDemo" type="button">Cancel</button>
 <div id="connectError" role="alert"></div>
 </form>
 </dialog>
@@ -130,17 +131,24 @@ const $=id=>document.getElementById(id);
 const names=['healthy-api','error-api','slow-api','timeout-api','demo-api'];
 const colors=['#12a879','#e44860','#e6a027','#64748b','#4f46e5'];
 const history=[], events=[];
-let key='', busy=false, connected=false, timer;
+let key='', busy=false, connected=false, timer, pendingAction='';
 const base=location.pathname.replace(/\/$/,'');
 const escapeHtml=value=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const time=value=>value?new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
 function message(text){$('message').textContent=text;$('message').style.display=text?'block':'none'}
-function lock(value){busy=value;document.querySelectorAll('[data-action],#refresh').forEach(b=>b.disabled=value||!connected)}
+function lock(value){busy=value;document.querySelectorAll('[data-action]').forEach(b=>b.disabled=value||!connected);refresh.disabled=value}
 async function api(path,method='GET'){
  const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),45000);
+ const headers=method==='POST'?{'x-functions-key':key}:{};
  try{
-  const r=await fetch(base+path,{method,headers:{'x-functions-key':key},cache:'no-store',signal:controller.signal});
-  if(r.status===401||r.status===403)throw Error('Access denied. Check that you entered a host key.');
+  const r=await fetch(base+path,{method,headers,cache:'no-store',signal:controller.signal});
+  if(r.status===401||r.status===403){
+   const error=Error(method==='POST'
+    ? 'Invalid key. Enter a valid host key for demo controls.'
+    : 'Public data access is not deployed yet.');
+   error.auth=method==='POST';
+   throw error;
+  }
   const body=await r.json().catch(()=>({}));
   if(!r.ok)throw Error(body.error||`Request failed (${r.status}).`);
   return body;
@@ -197,33 +205,85 @@ function drawChart(){
  });
  ctx.fillStyle='#69758b';ctx.fillText(time(minTime),left,height-5);ctx.textAlign='right';ctx.fillText(time(maxTime),width-right,height-5);
 }
+function promptForKey(action,error=''){
+ pendingAction=action;
+ $('connectError').textContent=error;
+ if(!$('connectDialog').open)$('connectDialog').showModal();
+ $('hostKey').focus();
+}
 async function refresh(){
- if(busy||!key)return;
+ if(busy)return;
  lock(true);
- try{render(await api('/data'));message('')}catch(e){message(e.message);$('connection').textContent='Refresh failed · previous results retained'}finally{lock(false)}
+ try{
+  render(await api('/data'));
+  connected=true;
+  message('');
+ }catch(e){
+  message(e.message);
+  $('connection').textContent='Refresh failed - previous results retained';
+ }finally{lock(false)}
 }
 async function demo(action){
- if(busy||!connected)return;
+ if(busy||!connected)return false;
+ if(!key){promptForKey(action);return false}
  lock(true);message('');
  try{
-  const data=await api('/demo?action='+action,'POST');
+  const data=await api('/demo?action='+encodeURIComponent(action),'POST');
   const a=data.api;
   $('demoHint').textContent=`Demo mode: ${data.mode}. Consecutive failures: ${a.consecutiveFailures}/3.`;
-
-  render(await api('/data'));
- }catch(e){message(e.message)}finally{lock(false)}
+  try{render(await api('/data'))}
+  catch(e){message('Demo check completed, but results could not refresh. Click Refresh results.')}
+  return true;
+ }catch(e){
+  if(e.auth){
+   key='';
+   $('hostKey').value='';
+   promptForKey(action,e.message);
+  }else{message(e.message)}
+  return false;
+ }finally{lock(false)}
 }
 $('connectForm').addEventListener('submit',async e=>{
- e.preventDefault();key=$('hostKey').value.trim();$('connectButton').disabled=true;$('connectError').textContent='';
- try{render(await api('/data'));connected=true;$('hostKey').value='';$('connectDialog').close();lock(false);clearInterval(timer);timer=setInterval(refresh,30000)}
- catch(error){key='';$('connectError').textContent=error.message}
- finally{$('connectButton').disabled=false}
+ e.preventDefault();
+ if(busy){$('connectError').textContent='Wait for the current request to finish.';return}
+ const enteredKey=$('hostKey').value.trim();
+ if(!enteredKey){$('connectError').textContent='Enter a key.';return}
+ key=enteredKey;
+ $('connectButton').disabled=true;
+ $('cancelDemo').disabled=true;
+ $('connectError').textContent='';
+ try{
+  if(await demo(pendingAction||'check')){
+   $('hostKey').value='';
+   pendingAction='';
+   $('connectDialog').close();
+  }
+ }finally{
+  $('connectButton').disabled=false;
+  $('cancelDemo').disabled=false;
+ }
+});
+function cancelKeyEntry(){
+ pendingAction='';
+ key='';
+ $('hostKey').value='';
+ $('connectError').textContent='';
+}
+$('cancelDemo').addEventListener('click',()=>{
+ cancelKeyEntry();
+ $('connectDialog').close();
+});
+$('connectDialog').addEventListener('cancel',e=>{
+ if(busy){e.preventDefault();return}
+ cancelKeyEntry();
 });
 $('refresh').addEventListener('click',refresh);
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>demo(b.dataset.action)));
 $('legend').innerHTML=names.map((n,i)=>`<span><i class="dot" style="background:${colors[i]}"></i>${n}</span>`).join('');
 window.addEventListener('resize',drawChart);
-lock(false);$('connectDialog').showModal();
+lock(false);
+refresh();
+timer=setInterval(refresh,30000);
 </script>
 </body>
 </html>
