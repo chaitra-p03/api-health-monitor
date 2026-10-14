@@ -261,22 +261,21 @@ Grant the deployment identity Website Contributor on the target Function App.
 The app name and package path in pom.xml and deploy.yml must match.
 This identity deploys code; the Function App's managed identity accesses tables.
 
-## Verification and limitations
+## Validation
 
-- Local build and all eleven tests passed.
-- Bicep compiled and deployed successfully.
-- The new cloud timer completed successful executions.
-- Public dashboard access and rejection of unauthenticated demo requests were verified.
-- The replacement alert rule is enabled and targets the new Application Insights resource.
-- Alert email delivery was confirmed before migration; delivery through the replacement rule still needs verification.
+11 automated tests cover HTTP status handling, latency, timeouts,
+alert thresholds, recovery, repeated-alert suppression, and HTTP trigger
+access configuration.
 
-An Azure Monitor alert resolving means its log-query condition cleared.
-Application RECOVERY messages indicate API recovery.
+The Azure deployment was verified through successful scheduled executions,
+public dashboard access, rejection of demo requests without a key,
+and email delivery through the replacement alert rule.
 
-The demo depends on httpbingo.org availability.
-Checks execute sequentially, and the dashboard may show older results between runs.
-Recent history retrieval is intended for this small demonstration workload.
-Public dashboard requests consume Azure resources.
+## Design considerations
 
-This is a demonstration monitor, not a production availability guarantee.
-Configure budget alerts and monitor student credit usage.
+- Configurable httpbingo.org endpoints provide controlled responses for
+  demonstrating healthy, failed, slow, and timed-out requests.
+- Monitoring runs every five minutes. The dashboard refreshes saved data
+  every 30 seconds without triggering new checks.
+- Check history and state are written separately. Atomic updates across
+  those writes are a future improvement.
